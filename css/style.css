@@ -1,0 +1,162 @@
+* {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+}
+
+body {
+    padding: 0;
+    margin-bottom: 80px;
+    background: #F5C556;
+    font-family: "Roboto", sans-serif;
+    font-weight: 100;
+}
+
+.container {
+    width: 90%;
+    margin: 0 auto;
+    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around; /* Para centrar los elementos horizontalmente */
+}
+
+#searchInput {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    font-size: 1.2rem;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+.pokemon-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px;
+    padding: 10px;
+    width: 150px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.pokemon-item:hover {
+    transform: scale(1.05);
+}
+
+.pokemon-item img {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+}
+
+.pokemon-item p {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 500px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.hidden {
+    display: none;
+}
+
+
+/* Estilos para hábitat de cuevas */
+.pokemon-habitat-cave {
+    background-color: #bfb16e; /* Color para cuevas */
+}
+
+/* Estilos para hábitat de bosques */
+.pokemon-habitat-forest {
+    background-color: #bea0c2; /* Color para bosques */
+}
+
+/* Estilos para hábitat de pastizales */
+.pokemon-habitat-grassland {
+    background-color: #9dc652; /* Color para pastizales */
+}
+
+/* Estilos para hábitat de montañas */
+.pokemon-habitat-mountain {
+    background-color: #c9ab40; /* Color para montañas */
+}
+
+/* Estilos para hábitat raro */
+.pokemon-habitat-rare {
+    background-color: rgba(255, 202, 142, 0.7); /* Color para hábitat raro */
+}
+
+/* Estilos para hábitat de terrenos difíciles */
+.pokemon-habitat-rough-terrain {
+    background-color: #e6c163; /* Color para terrenos difíciles */
+}
+
+/* Estilos para hábitat marino */
+.pokemon-habitat-sea {
+    background-color: #92a0c2; /* Color para hábitat marino */
+}
+
+/* Estilos para hábitat urbano */
+.pokemon-habitat-urban {
+    background-color: #f5c556; /* Color para hábitat urbano */
+}
+
+/* Estilos para otros hábitats */
+.pokemon-habitat-other {
+    background-color: #ff1212; /* Color para otros hábitats */
+}
+
+/* Estilos para hábitat de orilla de agua */
+.pokemon-habitat-waters-edge {
+    background-color: #92c5de; /* Color para orilla de agua */
+}
+
+@media only screen and (max-width: 768px) {
+    .pokemon-item {
+        width: 100%; /* Ajustar el ancho para que ocupe todo el ancho de la pantalla */
+        margin: 10px auto; /* Centrar los cuadros */
+    }
+}

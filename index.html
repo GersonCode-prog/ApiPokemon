@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon Search</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Pokémon Search</h1>
+        <input type="text" id="searchInput" placeholder="Search Pokémon">
+        <div id="pokemonList"></div>
+    </div>
+
+    <div id="pokemonModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalPokemonName"></h2>
+            <img id="modalPokemonImage" alt="Pokémon Image">
+            <p id="modalPokemonDetails"></p>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
