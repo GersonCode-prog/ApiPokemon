@@ -9,13 +9,13 @@
 <body>
     <div class="container">
         <h1>Pokémon Search</h1>
-        <input type="text" id="searchInput" placeholder="Search Pokémon">
-        <div id="pokemonList"></div>
+        <input type="text" id="searchInput" aria-label="Search Pokémon" placeholder="Search Pokémon">
+        <div id="pokemonList" class="pokemon-list"></div>
     </div>
 
-    <div id="pokemonModal" class="modal hidden">
+    <div id="pokemonModal" class="modal hidden" role="dialog" aria-labelledby="modalPokemonName" aria-modal="true">
         <div class="modal-content">
-            <span class="close">&times;</span>
+            <button class="close" aria-label="Close">&times;</button>
             <h2 id="modalPokemonName"></h2>
             <img id="modalPokemonImage" alt="Pokémon Image">
             <p id="modalPokemonDetails"></p>
