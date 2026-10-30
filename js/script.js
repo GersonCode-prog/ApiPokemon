@@ -4,11 +4,12 @@
    Configuración
    ========================================= */
 const API_URL = 'https://pokeapi.co/api/v2';
-const TOTAL_POKEMON = 151;
-const BATCH_SIZE = 20;                       // peticiones en paralelo por lote
-const CACHE_KEY = 'pokedex-kanto-v1';
+const SPRITE_URL = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon';
+const CACHE_KEY = 'pokedex-index-v2';
+const OLD_CACHE_KEYS = ['pokedex-kanto-v1'];
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;   // 7 días
 const MAX_STAT = 255;
+const SKELETON_COUNT = 24;
 
 const TYPE_NAMES = {
     normal: 'Normal', fire: 'Fuego', water: 'Agua', grass: 'Planta',
@@ -35,12 +36,20 @@ const STAT_NAMES = {
     'special-attack': 'At. Esp.', 'special-defense': 'Def. Esp.', speed: 'Velocidad'
 };
 
-// Nombres que la API devuelve "feos"
+const REGION_NAMES = {
+    kanto: 'Kanto', johto: 'Johto', hoenn: 'Hoenn', sinnoh: 'Sinnoh',
+    unova: 'Teselia', kalos: 'Kalos', alola: 'Alola', galar: 'Galar', paldea: 'Paldea'
+};
+
+// Nombres que no se pueden armar solo cambiando guiones por espacios
 const SPECIAL_NAMES = {
-    'nidoran-f': 'Nidoran ♀',
-    'nidoran-m': 'Nidoran ♂',
-    'mr-mime': 'Mr. Mime',
-    'farfetchd': "Farfetch'd"
+    'nidoran-f': 'Nidoran ♀', 'nidoran-m': 'Nidoran ♂',
+    'mr-mime': 'Mr. Mime', 'mime-jr': 'Mime Jr.', 'mr-rime': 'Mr. Rime',
+    'farfetchd': "Farfetch'd", 'sirfetchd': "Sirfetch'd",
+    'type-null': 'Type: Null', 'flabebe': 'Flabébé',
+    'ho-oh': 'Ho-Oh', 'porygon-z': 'Porygon-Z',
+    'jangmo-o': 'Jangmo-o', 'hakamo-o': 'Hakamo-o', 'kommo-o': 'Kommo-o',
+    'wo-chien': 'Wo-Chien', 'chien-pao': 'Chien-Pao', 'ting-lu': 'Ting-Lu', 'chi-yu': 'Chi-Yu'
 };
 
 /* =========================================
@@ -50,8 +59,12 @@ const state = {
     pokemons: [],
     byId: new Map(),
     cards: new Map(),
+    details: new Map(),     // detalles cargados bajo demanda (id → Promise)
+    generations: [],
     query: '',
-    type: 'all'
+    type: 'all',
+    gen: 'all',
+    currentId: null
 };
 
 let els = null;
@@ -68,6 +81,7 @@ function init() {
 
     els = {
         search: document.getElementById('searchInput'),
+        genFilter: document.getElementById('genFilter'),
         list: document.getElementById('pokemonList'),
         empty: document.getElementById('emptyState'),
         status: document.getElementById('status'),
@@ -84,7 +98,6 @@ function init() {
         stats: document.getElementById('modalPokemonStats')
     };
 
-    // Búsqueda con debounce
     els.search.addEventListener('input', () => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
@@ -93,7 +106,11 @@ function init() {
         }, 150);
     });
 
-    // Delegación de eventos: un solo listener para todas las tarjetas
+    els.genFilter.addEventListener('change', () => {
+        state.gen = els.genFilter.value;
+        applyFilters();
+    });
+
     els.list.addEventListener('click', (event) => {
         const card = event.target.closest('.pokemon-item');
         if (card) openModal(Number(card.dataset.id));
@@ -116,7 +133,6 @@ function init() {
     document.addEventListener('keydown', (event) => {
         if (els.modal.hidden) return;
         if (event.key === 'Escape') closeModal();
-        // El único elemento enfocable del modal es el botón cerrar: mantener el foco ahí
         if (event.key === 'Tab') {
             event.preventDefault();
             els.close.focus();
@@ -127,65 +143,127 @@ function init() {
 }
 
 /* =========================================
-   Carga de datos
+   Carga del índice
+   En vez de pedir cada Pokémon (2 peticiones × 1000+), se arma el índice
+   con los endpoints agrupados: especies, tipos, generaciones y hábitats.
+   Son ~40 peticiones en total. Los detalles se piden al abrir el modal.
    ========================================= */
 async function loadPokedex() {
+    cleanOldCache();
+
     const cached = readCache();
     if (cached) {
-        addPokemons(cached);
-        finishLoading(0);
+        setupData(cached);
         return;
     }
 
-    renderSkeletons(TOTAL_POKEMON);
-    setStatus(`Cargando… 0 de ${TOTAL_POKEMON}`);
+    renderSkeletons(SKELETON_COUNT);
+    setStatus('Cargando la Pokédex…');
 
-    let failed = 0;
-
-    // Por lotes para no lanzar 300 peticiones a la vez
-    for (let start = 1; start <= TOTAL_POKEMON; start += BATCH_SIZE) {
-        const ids = range(start, Math.min(start + BATCH_SIZE - 1, TOTAL_POKEMON));
-        const results = await Promise.allSettled(ids.map(fetchPokemon));
-        const loaded = [];
-
-        results.forEach((result, i) => {
-            if (result.status === 'fulfilled') {
-                loaded.push(result.value);
-            } else {
-                failed++;
-                console.error(`Error cargando el Pokémon #${ids[i]}:`, result.reason);
-            }
-        });
-
-        addPokemons(loaded);
-        removeSkeletons(ids.length);
-        setStatus(`Cargando… ${state.pokemons.length} de ${TOTAL_POKEMON}`);
+    try {
+        const index = await fetchIndex();
+        writeCache(index);
+        removeSkeletons();
+        setupData(index);
+    } catch (error) {
+        console.error('Error cargando la Pokédex:', error);
+        removeSkeletons();
+        setStatus('No se pudo cargar la Pokédex. Revisa tu conexión y recarga la página.');
     }
-
-    if (failed === 0) writeCache(state.pokemons);
-    finishLoading(failed);
 }
 
-async function fetchPokemon(id) {
-    const data = await getJSON(`${API_URL}/pokemon/${id}`);
-    const species = await getJSON(data.species.url);
-    const other = data.sprites.other || {};
-    const artwork = other['official-artwork'] ? other['official-artwork'].front_default : null;
+async function fetchIndex() {
+    const [speciesList, typeList, genList, habitatList] = await Promise.all([
+        getJSON(`${API_URL}/pokemon-species?limit=100000`),
+        getJSON(`${API_URL}/type?limit=100`),
+        getJSON(`${API_URL}/generation?limit=100`),
+        getJSON(`${API_URL}/pokemon-habitat?limit=100`)
+    ]);
 
-    return {
-        id: data.id,
-        name: data.name,
-        height: data.height / 10,   // la API da decímetros → metros
-        weight: data.weight / 10,   // la API da hectogramos → kg
-        types: data.types.map((t) => t.type.name),
-        habitat: species.habitat ? species.habitat.name : 'unknown',
-        color: species.color ? species.color.name : 'unknown',
-        sprite: data.sprites.front_default,
-        artwork: artwork || data.sprites.front_default,
-        stats: data.stats.map((s) => ({ name: s.stat.name, value: s.base_stat })),
-        genus: pickLanguage(species.genera, 'genus'),
-        flavor: pickLanguage(species.flavor_text_entries, 'flavor_text')
-    };
+    // Se omiten tipos especiales sin Pokémon (unknown, shadow, stellar…)
+    const types = typeList.results.filter((type) => TYPE_NAMES[type.name]);
+
+    const [typeData, genData, habitatData] = await Promise.all([
+        Promise.all(types.map((type) => getJSON(type.url))),
+        Promise.all(genList.results.map((gen) => getJSON(gen.url))),
+        Promise.all(habitatList.results.map((habitat) => getJSON(habitat.url)))
+    ]);
+
+    const pokemons = new Map();
+
+    speciesList.results.forEach((species) => {
+        const id = getIdFromUrl(species.url);
+        pokemons.set(id, { id: id, name: species.name, types: [], habitat: 'unknown', gen: 0 });
+    });
+
+    // Tipos: el endpoint /type/{x} trae todos los Pokémon de ese tipo con su "slot"
+    // (Las formas alternas tienen id > 10000 y no coinciden con ninguna especie: se ignoran)
+    typeData.forEach((type) => {
+        type.pokemon.forEach((entry) => {
+            const pokemon = pokemons.get(getIdFromUrl(entry.pokemon.url));
+            if (pokemon) pokemon.types[entry.slot - 1] = type.name;
+        });
+    });
+
+    habitatData.forEach((habitat) => {
+        habitat.pokemon_species.forEach((species) => {
+            const pokemon = pokemons.get(getIdFromUrl(species.url));
+            if (pokemon) pokemon.habitat = habitat.name;
+        });
+    });
+
+    const generations = genData
+        .map((gen) => {
+            gen.pokemon_species.forEach((species) => {
+                const pokemon = pokemons.get(getIdFromUrl(species.url));
+                if (pokemon) pokemon.gen = gen.id;
+            });
+            const roman = gen.name.split('-')[1].toUpperCase();
+            const region = gen.main_region ? gen.main_region.name : '';
+            return {
+                id: gen.id,
+                label: `Gen ${roman}${region ? ' · ' + (REGION_NAMES[region] || capitalize(region)) : ''}`
+            };
+        })
+        .sort((a, b) => a.id - b.id);
+
+    const list = Array.from(pokemons.values())
+        .map((pokemon) => Object.assign(pokemon, { types: pokemon.types.filter(Boolean) }))
+        .sort((a, b) => a.id - b.id);
+
+    return { pokemons: list, generations: generations };
+}
+
+function setupData(index) {
+    state.generations = index.generations;
+    addPokemons(index.pokemons);
+    renderGenerationFilter();
+    renderTypeFilters();
+    applyFilters();
+}
+
+/* =========================================
+   Detalles (bajo demanda, al abrir el modal)
+   ========================================= */
+function getDetails(id) {
+    if (!state.details.has(id)) {
+        const promise = Promise.all([
+            getJSON(`${API_URL}/pokemon/${id}`),
+            getJSON(`${API_URL}/pokemon-species/${id}`)
+        ]).then(([data, species]) => ({
+            height: data.height / 10,   // decímetros → metros
+            weight: data.weight / 10,   // hectogramos → kg
+            color: species.color ? species.color.name : 'unknown',
+            stats: data.stats.map((s) => ({ name: s.stat.name, value: s.base_stat })),
+            genus: pickLanguage(species.genera, 'genus'),
+            flavor: pickLanguage(species.flavor_text_entries, 'flavor_text')
+        }));
+
+        // Si falla, se borra para poder reintentar al volver a abrir
+        promise.catch(() => state.details.delete(id));
+        state.details.set(id, promise);
+    }
+    return state.details.get(id);
 }
 
 async function getJSON(url) {
@@ -194,7 +272,6 @@ async function getJSON(url) {
     return response.json();
 }
 
-// Busca el texto en español; si no existe, en inglés
 function pickLanguage(entries, field) {
     if (!entries || !entries.length) return '';
     const entry = entries.find((e) => e.language.name === 'es')
@@ -202,16 +279,8 @@ function pickLanguage(entries, field) {
     return entry ? entry[field].replace(/[\n\f\r\u00ad]+/g, ' ').trim() : '';
 }
 
-function finishLoading(failed) {
-    renderTypeFilters();
-    applyFilters();
-    setStatus(failed
-        ? `No se pudieron cargar ${failed} Pokémon. Recarga la página para reintentar.`
-        : '');
-}
-
 /* =========================================
-   Caché local (para no descargar todo cada vez)
+   Caché local del índice
    ========================================= */
 function readCache() {
     try {
@@ -219,7 +288,7 @@ function readCache() {
         if (!raw) return null;
         const cache = JSON.parse(raw);
         const fresh = Date.now() - cache.savedAt < CACHE_TTL;
-        return fresh && Array.isArray(cache.data) && cache.data.length === TOTAL_POKEMON
+        return fresh && cache.data && Array.isArray(cache.data.pokemons) && cache.data.pokemons.length
             ? cache.data
             : null;
     } catch (error) {
@@ -231,7 +300,15 @@ function writeCache(data) {
     try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data: data }));
     } catch (error) {
-        // Almacenamiento lleno o bloqueado: no pasa nada, solo no se cachea
+        // Almacenamiento lleno o bloqueado: solo no se cachea
+    }
+}
+
+function cleanOldCache() {
+    try {
+        OLD_CACHE_KEYS.forEach((key) => localStorage.removeItem(key));
+    } catch (error) {
+        // ignorar
     }
 }
 
@@ -241,22 +318,19 @@ function writeCache(data) {
 function addPokemons(pokemons) {
     const fragment = document.createDocumentFragment();
 
-    pokemons
-        .sort((a, b) => a.id - b.id)
-        .forEach((pokemon) => {
-            pokemon.displayName = getDisplayName(pokemon.name);
-            pokemon.searchText = `${pokemon.name} ${pokemon.displayName.toLowerCase()}`;
+    pokemons.forEach((pokemon) => {
+        pokemon.displayName = getDisplayName(pokemon.name);
+        pokemon.searchText = `${pokemon.name} ${pokemon.displayName.toLowerCase()}`;
 
-            state.pokemons.push(pokemon);
-            state.byId.set(pokemon.id, pokemon);
+        state.pokemons.push(pokemon);
+        state.byId.set(pokemon.id, pokemon);
 
-            const card = createCard(pokemon);
-            state.cards.set(pokemon.id, card);
-            fragment.appendChild(card);
-        });
+        const card = createCard(pokemon);
+        state.cards.set(pokemon.id, card);
+        fragment.appendChild(card);
+    });
 
-    // Inserta antes de los skeletons (si no hay, se agrega al final)
-    els.list.insertBefore(fragment, els.list.querySelector('.skeleton'));
+    els.list.appendChild(fragment);
 }
 
 function createCard(pokemon) {
@@ -271,11 +345,16 @@ function createCard(pokemon) {
     number.textContent = formatNumber(pokemon.id);
 
     const img = document.createElement('img');
-    img.src = pokemon.sprite;
+    img.src = spriteUrl(pokemon.id);
     img.alt = '';
     img.loading = 'lazy';
+    img.decoding = 'async';
     img.width = 96;
     img.height = 96;
+    // Si no existe el sprite pequeño, usar la ilustración oficial
+    img.addEventListener('error', () => {
+        img.src = artworkUrl(pokemon.id);
+    }, { once: true });
 
     const name = document.createElement('span');
     name.className = 'name';
@@ -308,23 +387,26 @@ function renderSkeletons(count) {
     els.list.appendChild(fragment);
 }
 
-function removeSkeletons(count) {
-    const skeletons = els.list.querySelectorAll('.skeleton');
-    for (let i = 0; i < count && i < skeletons.length; i++) {
-        skeletons[i].remove();
-    }
+function removeSkeletons() {
+    els.list.querySelectorAll('.skeleton').forEach((skeleton) => skeleton.remove());
 }
 
 /* =========================================
    Filtros
    ========================================= */
+function renderGenerationFilter() {
+    els.genFilter.replaceChildren(new Option('Todas las generaciones', 'all'));
+    state.generations.forEach((gen) => {
+        els.genFilter.appendChild(new Option(gen.label, String(gen.id)));
+    });
+    els.genFilter.value = state.gen;
+}
+
 function renderTypeFilters() {
-    // Solo los tipos que realmente existen en los Pokémon cargados
     const present = new Set(state.pokemons.flatMap((p) => p.types));
     const types = Object.keys(TYPE_NAMES).filter((type) => present.has(type));
 
-    els.filters.replaceChildren();
-    els.filters.appendChild(createFilterButton('all', 'Todos', 'chip-all'));
+    els.filters.replaceChildren(createFilterButton('all', 'Todos', 'chip-all'));
     types.forEach((type) => {
         els.filters.appendChild(createFilterButton(type, TYPE_NAMES[type], `type-${type}`));
     });
@@ -348,8 +430,9 @@ function updateFilterButtons() {
 }
 
 function applyFilters() {
-    const query = state.query.replace(/^#/, '');
+    const query = state.query.replace(/^#0*/, '');
     const isNumber = /^\d+$/.test(query);
+    const gen = state.gen === 'all' ? null : Number(state.gen);
     let visible = 0;
 
     state.pokemons.forEach((pokemon) => {
@@ -357,59 +440,96 @@ function applyFilters() {
             || pokemon.searchText.includes(query)
             || (isNumber && pokemon.id === Number(query));
         const matchesType = state.type === 'all' || pokemon.types.includes(state.type);
-        const show = matchesQuery && matchesType;
+        const matchesGen = gen === null || pokemon.gen === gen;
+        const show = matchesQuery && matchesType && matchesGen;
 
         state.cards.get(pokemon.id).hidden = !show;
         if (show) visible++;
     });
 
-    // Solo mostrar "sin resultados" cuando ya hay datos cargados
     els.empty.hidden = visible > 0 || state.pokemons.length === 0;
+    setStatus(`Mostrando ${visible.toLocaleString('es')} de ${state.pokemons.length.toLocaleString('es')} Pokémon`);
 }
 
 /* =========================================
    Modal
    ========================================= */
-function openModal(id) {
+async function openModal(id) {
     const pokemon = state.byId.get(id);
     if (!pokemon) return;
 
+    state.currentId = id;
     lastFocused = document.activeElement;
 
+    // Lo que ya tenemos se muestra al instante
     els.header.className = `modal-header habitat-${pokemon.habitat}`;
-    els.image.src = pokemon.artwork;
+    els.image.onerror = () => {
+        els.image.onerror = null;
+        els.image.src = spriteUrl(id);
+    };
+    els.image.src = artworkUrl(id);
     els.image.alt = `Ilustración de ${pokemon.displayName}`;
-    els.number.textContent = pokemon.genus
-        ? `${formatNumber(pokemon.id)} · ${pokemon.genus}`
-        : formatNumber(pokemon.id);
+    els.number.textContent = formatNumber(id);
     els.name.textContent = pokemon.displayName;
     els.types.replaceChildren(...createTypeBadges(pokemon.types).children);
-
-    els.flavor.textContent = pokemon.flavor;
-    els.flavor.hidden = !pokemon.flavor;
-
-    els.details.replaceChildren(
-        createDetail('Altura', `${pokemon.height.toFixed(1)} m`),
-        createDetail('Peso', `${pokemon.weight.toFixed(1)} kg`),
-        createDetail('Hábitat', HABITAT_NAMES[pokemon.habitat] || capitalize(pokemon.habitat)),
-        createDetail('Color', COLOR_NAMES[pokemon.color] || capitalize(pokemon.color))
-    );
-
-    const total = pokemon.stats.reduce((sum, stat) => sum + stat.value, 0);
-    els.stats.replaceChildren(
-        ...pokemon.stats.map(createStatRow),
-        createTotalRow(total)
-    );
+    els.flavor.hidden = true;
+    els.details.replaceChildren();
+    els.stats.replaceChildren(createLoadingText('Cargando detalles…'));
 
     els.modal.hidden = false;
     document.body.classList.add('modal-open');
     els.close.focus();
+
+    // Los detalles se piden ahora (y quedan en memoria para la próxima vez)
+    try {
+        const details = await getDetails(id);
+        if (state.currentId !== id) return;   // el usuario ya abrió otro o cerró
+        renderDetails(pokemon, details);
+    } catch (error) {
+        console.error(`Error cargando detalles de #${id}:`, error);
+        if (state.currentId === id) {
+            els.stats.replaceChildren(createLoadingText('No se pudieron cargar los detalles. Intenta de nuevo.'));
+        }
+    }
+}
+
+function renderDetails(pokemon, details) {
+    if (details.genus) {
+        els.number.textContent = `${formatNumber(pokemon.id)} · ${details.genus}`;
+    }
+
+    els.flavor.textContent = details.flavor;
+    els.flavor.hidden = !details.flavor;
+
+    const gen = state.generations.find((g) => g.id === pokemon.gen);
+
+    els.details.replaceChildren(
+        createDetail('Altura', `${details.height.toFixed(1)} m`),
+        createDetail('Peso', `${details.weight.toFixed(1)} kg`),
+        createDetail('Generación', gen ? gen.label : '—'),
+        createDetail('Color', COLOR_NAMES[details.color] || capitalize(details.color)),
+        createDetail('Hábitat', HABITAT_NAMES[pokemon.habitat] || capitalize(pokemon.habitat))
+    );
+
+    const total = details.stats.reduce((sum, stat) => sum + stat.value, 0);
+    els.stats.replaceChildren(
+        ...details.stats.map(createStatRow),
+        createTotalRow(total)
+    );
 }
 
 function closeModal() {
+    state.currentId = null;
     els.modal.hidden = true;
     document.body.classList.remove('modal-open');
     if (lastFocused) lastFocused.focus();
+}
+
+function createLoadingText(text) {
+    const p = document.createElement('p');
+    p.className = 'loading-text';
+    p.textContent = text;
+    return p;
 }
 
 function createDetail(label, value) {
@@ -469,14 +589,20 @@ function setStatus(message) {
     els.status.textContent = message;
 }
 
-function range(from, to) {
-    const result = [];
-    for (let i = from; i <= to; i++) result.push(i);
-    return result;
+function getIdFromUrl(url) {
+    return Number(url.split('/').filter(Boolean).pop());
+}
+
+function spriteUrl(id) {
+    return `${SPRITE_URL}/${id}.png`;
+}
+
+function artworkUrl(id) {
+    return `${SPRITE_URL}/other/official-artwork/${id}.png`;
 }
 
 function formatNumber(id) {
-    return `#${String(id).padStart(3, '0')}`;
+    return `#${String(id).padStart(4, '0')}`;
 }
 
 function capitalize(text) {
@@ -484,5 +610,7 @@ function capitalize(text) {
 }
 
 function getDisplayName(name) {
-    return SPECIAL_NAMES[name] || capitalize(name);
+    if (SPECIAL_NAMES[name]) return SPECIAL_NAMES[name];
+    // "tapu-koko" → "Tapu Koko", "iron-valiant" → "Iron Valiant"
+    return name.split('-').map(capitalize).join(' ');
 }
