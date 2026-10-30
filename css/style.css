@@ -3,7 +3,6 @@
    ========================================= */
 :root {
     --bg: #F5C556;
-    --bg-dark: #e0ad3a;
     --surface: #ffffff;
     --text: #1f2933;
     --text-muted: #5f6b7a;
@@ -47,7 +46,9 @@ img {
     display: block;
 }
 
-button {
+button,
+select,
+input {
     font: inherit;
     color: inherit;
 }
@@ -83,10 +84,18 @@ button {
     font-weight: 300;
 }
 
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin: 20px auto 16px;
+    max-width: 680px;
+}
+
 .search {
     position: relative;
-    max-width: 420px;
-    margin: 20px auto 16px;
+    flex: 1 1 320px;
 }
 
 .search-icon {
@@ -100,10 +109,11 @@ button {
     pointer-events: none;
 }
 
-#searchInput {
+#searchInput,
+.gen-filter {
     width: 100%;
-    padding: 12px 14px 12px 44px;
-    font-size: 1.1rem;
+    padding: 12px 14px;
+    font-size: 1.05rem;
     border: 2px solid transparent;
     border-radius: 999px;
     background: var(--surface);
@@ -111,7 +121,17 @@ button {
     transition: border-color 0.2s;
 }
 
-#searchInput:focus {
+#searchInput {
+    padding-left: 44px;
+}
+
+.gen-filter {
+    flex: 0 1 240px;
+    cursor: pointer;
+}
+
+#searchInput:focus,
+.gen-filter:focus {
     outline: none;
     border-color: var(--focus);
 }
@@ -132,7 +152,7 @@ button {
     font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
-    transition: transform 0.15s, background-color 0.15s;
+    transition: transform 0.15s;
 }
 
 .type-chip:hover {
@@ -179,6 +199,9 @@ button {
     text-align: center;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
+    /* El navegador no pinta las tarjetas fuera de pantalla: clave con 1000+ tarjetas */
+    content-visibility: auto;
+    contain-intrinsic-size: 160px 190px;
 }
 
 .pokemon-item:hover {
@@ -190,7 +213,6 @@ button {
     width: 96px;
     height: 96px;
     object-fit: contain;
-    image-rendering: pixelated;
     filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.2));
 }
 
@@ -361,6 +383,12 @@ button {
     text-align: left;
 }
 
+.loading-text {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: left;
+}
+
 .stat {
     display: grid;
     grid-template-columns: 80px 36px 1fr;
@@ -415,6 +443,8 @@ button {
 
 /* =========================================
    Colores por hábitat
+   (la API solo tiene hábitat hasta la Gen III;
+    el resto usa "unknown")
    ========================================= */
 .habitat-cave          { background-color: #bfb16e; }
 .habitat-forest        { background-color: #bea0c2; }
@@ -425,7 +455,8 @@ button {
 .habitat-sea           { background-color: #92a0c2; }
 .habitat-urban         { background-color: #f7d98a; }
 .habitat-waters-edge   { background-color: #92c5de; }
-.habitat-unknown       { background-color: #d9d9d9; }
+.habitat-unknown       { background-color: #eef0f3; }
+.pokemon-item.habitat-unknown { background-color: var(--surface); }
 
 /* =========================================
    Colores por tipo
@@ -449,7 +480,6 @@ button {
 .type-steel    { background-color: #B7B7CE; }
 .type-fairy    { background-color: #D685AD; }
 
-/* Los chips de filtro usan el color del tipo con texto blanco */
 .type-chip[class*="type-"]:not(.chip-all) {
     color: #fff;
     text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
@@ -467,6 +497,10 @@ button {
     .pokemon-item img {
         width: 80px;
         height: 80px;
+    }
+
+    .gen-filter {
+        flex-basis: 100%;
     }
 
     .modal-body {
