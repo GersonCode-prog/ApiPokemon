@@ -1,27 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Buscador de los 151 Pokémon de Kanto usando PokéAPI">
     <title>Pokémon Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Pokémon Search</h1>
-        <input type="text" id="searchInput" aria-label="Search Pokémon" placeholder="Search Pokémon">
-        <div id="pokemonList" class="pokemon-list"></div>
-    </div>
+    <header class="header">
+        <div class="container">
+            <h1 class="title">Pokémon Search</h1>
+            <p class="subtitle">Los 151 Pokémon de Kanto</p>
 
-    <div id="pokemonModal" class="modal hidden" role="dialog" aria-labelledby="modalPokemonName" aria-modal="true">
-        <div class="modal-content">
-            <button class="close" aria-label="Close">&times;</button>
-            <h2 id="modalPokemonName"></h2>
-            <img id="modalPokemonImage" alt="Pokémon Image">
-            <p id="modalPokemonDetails"></p>
+            <div class="search">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+                <input type="search" id="searchInput" aria-label="Buscar Pokémon"
+                       placeholder="Buscar por nombre o número" autocomplete="off">
+            </div>
+
+            <div id="typeFilters" class="type-filters" role="group" aria-label="Filtrar por tipo"></div>
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+        </div>
+    </header>
+
+    <main class="container">
+        <div id="pokemonList" class="pokemon-list"></div>
+        <p id="emptyState" class="empty" hidden>No se encontraron Pokémon con esos filtros.</p>
+    </main>
+
+    <div id="pokemonModal" class="modal" hidden>
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalPokemonName">
+            <button type="button" class="close" aria-label="Cerrar">&times;</button>
+
+            <div id="modalHeader" class="modal-header">
+                <img id="modalPokemonImage" alt="" width="200" height="200">
+            </div>
+
+            <div class="modal-body">
+                <p id="modalPokemonNumber" class="number"></p>
+                <h2 id="modalPokemonName"></h2>
+                <div id="modalPokemonTypes" class="types"></div>
+                <p id="modalPokemonFlavor" class="flavor"></p>
+
+                <dl id="modalPokemonDetails" class="details"></dl>
+
+                <h3 class="section-title">Estadísticas base</h3>
+                <div id="modalPokemonStats" class="stats"></div>
+            </div>
         </div>
     </div>
 
-    <script src="js/script.js"></script>
+    <script src="js/script.js" defer></script>
 </body>
 </html>
